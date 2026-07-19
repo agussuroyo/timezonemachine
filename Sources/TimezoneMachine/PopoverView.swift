@@ -5,7 +5,20 @@ private let defaultZones = ["Asia/Tokyo", "Europe/Berlin", "America/New_York"]
 private let pxPerHour: CGFloat = 26
 private let snapChoices = [1, 5, 10, 15, 30, 60]  // minutes per scrub step
 
+// Subtle by intent: short eases, no overshoot. This app is opened dozens of times a day,
+// and bouncy motion that delights on day one grates by day thirty.
+private let ease = Animation.easeInOut(duration: 0.25)
+private let quick = Animation.easeOut(duration: 0.15)
+
+extension View {
+    /// Applies an animation unless the system asks for reduced motion.
+    func motion(_ animation: Animation, _ reduced: Bool, value: some Equatable) -> some View {
+        self.animation(reduced ? nil : animation, value: value)
+    }
+}
+
 struct PopoverView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // ponytail: newline-joined ids instead of Codable+JSON — IANA ids contain neither commas nor newlines.
     @AppStorage("zones") private var stored = defaultZones.joined(separator: "\n")
     @State private var offset: TimeInterval = 0
@@ -41,7 +54,8 @@ struct PopoverView: View {
                 // So this moves the row itself and does the index math, no drag session involved.
                 ForEach(zones, id: \.self) { id in
                     if let info = zoneInfo(for: id, at: simulated, local: local, hours: hours) {
-                        ZoneRow(info: info, onRemove: { remove(id) })
+                        ZoneRow(info: info, onRemove: { remove(id) }, reduceMotion: reduceMotion)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                         // Measure a real row once; the swap threshold must match actual height.
                         .background(
                             GeometryReader { geo in
@@ -75,7 +89,7 @@ struct PopoverView: View {
 
                 // Local row is always last and never removable or movable.
                 if let here = zoneInfo(for: local.identifier, at: simulated, local: local, hours: hours) {
-                    ZoneRow(info: here, onRemove: nil)
+                    ZoneRow(info: here, onRemove: nil, reduceMotion: reduceMotion)
                 }
 
                 Ruler(offset: $offset, simulated: simulated, snap: TimeInterval(snapMinutes * 60))
@@ -83,7 +97,7 @@ struct PopoverView: View {
 
                 HStack {
                     Button {
-                        showAdd.toggle()
+                        withAnimation(reduceMotion ? nil : ease) { showAdd.toggle() }
                     } label: {
                         Label(showAdd ? "Done" : "Add timezone", systemImage: showAdd ? "checkmark" : "plus")
                     }
@@ -91,7 +105,7 @@ struct PopoverView: View {
                     Spacer()
 
                     Button {
-                        showSettings.toggle()
+                        withAnimation(reduceMotion ? nil : ease) { showSettings.toggle() }
                     } label: {
                         Image(systemName: "gearshape")
                     }
@@ -128,12 +142,16 @@ struct PopoverView: View {
 
     private func add(_ id: String) {
         guard !zones.contains(id) else { return }
-        stored = (zones + [id]).joined(separator: "\n")
+        withAnimation(reduceMotion ? nil : ease) {
+            stored = (zones + [id]).joined(separator: "\n")
+        }
         // Panel stays open so several zones can be added in a row; "Done" closes it.
     }
 
     private func remove(_ id: String) {
-        stored = zones.filter { $0 != id }.joined(separator: "\n")
+        withAnimation(reduceMotion ? nil : ease) {
+            stored = zones.filter { $0 != id }.joined(separator: "\n")
+        }
     }
 
     /// Remove-and-insert rather than swap: a fast drag can cross several slots at once, and
@@ -205,6 +223,7 @@ private struct SettingsView: View {
 private struct ZoneRow: View {
     let info: ZoneInfo
     let onRemove: (() -> Void)?  // nil for the local row, which can't be removed
+    let reduceMotion: Bool
 
     private var color: Color {
         switch info.vibe {
@@ -212,6 +231,23 @@ private struct ZoneRow: View {
         case .fringe: return .orange
         case .asleep: return .secondary
         }
+    }
+
+    private var sky: Color {
+        Color(red: info.sky.r, green: info.sky.g, blue: info.sky.b)
+    }
+
+    /// The signature: daylight where they are, as a wash behind the row. Kept faint so it
+    /// never fights the text in either light or dark mode — it should read as atmosphere,
+    /// not as a filled bar. Scrubbing sweeps it across the rows at different moments,
+    /// because the zones reach each hour at different times.
+    private var skyWash: some View {
+        LinearGradient(
+            colors: [sky.opacity(0.18), sky.opacity(0.04)],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 5))
     }
 
     var body: some View {
@@ -226,6 +262,8 @@ private struct ZoneRow: View {
 
             Text(info.time)
                 .font(.system(.body, design: .monospaced))
+                // Digits roll like a departure board instead of snapping.
+                .contentTransition(.numericText())
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(info.offsetText)
@@ -247,7 +285,13 @@ private struct ZoneRow: View {
             .help("Remove \(info.label)")
         }
         .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(skyWash)
         .opacity(info.vibe == .asleep ? 0.6 : 1)
+        // The wash and the dot ease between states rather than snapping at boundary hours.
+        .motion(ease, reduceMotion, value: info.sky)
+        .motion(ease, reduceMotion, value: info.vibe)
+        .motion(quick, reduceMotion, value: info.time)
     }
 }
 

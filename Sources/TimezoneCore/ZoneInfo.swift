@@ -40,6 +40,9 @@ public struct ZoneInfo: Identifiable, Sendable {
     public let offsetText: String // "+9h" | "-5h30m" | "—" when it is the local zone
     public let isWeekend: Bool
     public let vibe: Vibe
+    /// Daylight colour where they are. Independent of `vibe`: the dot answers "are they
+    /// available" (user's work hours), this answers "is it light out" (fixed day ramp).
+    public let sky: RGB
     public let isLocal: Bool
 }
 
@@ -125,6 +128,10 @@ public func zoneInfo(
         offsetText: isLocal ? "—" : offsetText(zone, from: local, at: date),
         isWeekend: cal.isDateInWeekend(date),
         vibe: vibe(hour: cal.component(.hour, from: date), hours: hours),
+        sky: skyTint(
+            hour: cal.component(.hour, from: date),
+            minute: cal.component(.minute, from: date)
+        ),
         isLocal: isLocal
     )
 }

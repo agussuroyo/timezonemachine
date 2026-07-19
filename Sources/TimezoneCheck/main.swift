@@ -89,4 +89,33 @@ assert(searchZones("").count > 100)
 assert(searchZones("nope-nowhere").isEmpty)
 assert(zoneInfo(for: "Mars/Olympus_Mons", at: d, local: sf) == nil)
 
+// Sky ramp. Closes the circle: 24:00 must equal 00:00 or the colour seams at midnight.
+assert(skyTint(hour: 24) == skyTint(hour: 0))
+
+// Every channel stays in gamut across all 1440 minutes of the day.
+for m in 0..<1440 {
+    let c = skyTint(hour: m / 60, minute: m % 60)
+    assert((0...1).contains(c.r) && (0...1).contains(c.g) && (0...1).contains(c.b))
+}
+
+// Night is bluest (blue exceeds red); noon is warmest (red exceeds blue).
+let midnight = skyTint(hour: 0)
+let noon = skyTint(hour: 12)
+assert(midnight.b > midnight.r)
+assert(noon.r > noon.b)
+assert(noon.r > midnight.r)
+
+// Interpolation actually moves between keyframes rather than stepping.
+let dawnEarly = skyTint(hour: 6, minute: 0)
+let dawnMid = skyTint(hour: 6, minute: 30)
+let dawnLate = skyTint(hour: 7, minute: 0)
+assert(dawnEarly.r < dawnMid.r && dawnMid.r < dawnLate.r)
+
+// Out-of-range input clamps rather than trapping.
+assert(skyTint(hour: 99) == skyTint(hour: 24))
+assert(skyTint(hour: -5) == skyTint(hour: 0))
+
+// The row carries the tint through.
+assert(zoneInfo(for: "Asia/Tokyo", at: d, local: sf)!.sky == skyTint(hour: 8, minute: 0))
+
 print("all checks passed")
