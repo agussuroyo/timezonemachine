@@ -341,24 +341,57 @@ private struct Ruler: View {
             .frame(height: 26)
             .overlay(Scrubber(onScrub: scrub, onReset: reset))
 
-            Text(offset == 0 ? "now · drag or scroll to scrub" : "\(shifted) · click to reset")
-                .font(.caption2)
-                .foregroundStyle(offset == 0 ? .secondary : .primary)
-                .frame(maxWidth: .infinity)
+            HStack(spacing: 10) {
+                stepButton("backward.fill", -1, "Step back")
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+
+                Button(action: reset) {
+                    Text(offset == 0 ? "now" : shifted)
+                        .font(.caption2)
+                        .foregroundStyle(offset == 0 ? .secondary : .primary)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .help(offset == 0 ? "Drag, scroll, or step the ruler" : "Back to now")
+
+                stepButton("forward.fill", 1, "Step forward")
+                    .keyboardShortcut(.rightArrow, modifiers: [])
+            }
         }
     }
 
-    /// `dx` is raw pointer movement in points. It accumulates unsnapped in `raw`, and only the
-    /// exposed `offset` is snapped — snapping every event instead would round each small scroll
-    /// tick back to where it started, so slow scrolling would move nothing.
+    private func stepButton(_ symbol: String, _ direction: Int, _ label: String) -> some View {
+        Button { step(direction) } label: {
+            Image(systemName: symbol).font(.caption)
+        }
+        .buttonStyle(.borderless)
+        // Native hold-to-repeat at the system rate — no timer to own, and it matches the
+        // feel of every other stepper on the machine.
+        .buttonRepeatBehavior(.enabled)
+        .disabled(direction < 0 ? offset <= -maxShift : offset >= maxShift)
+        .help(label)
+    }
+
+    /// Steps from the snapped `offset`, not from `raw`: after a scroll leaves raw at, say,
+    /// 7 minutes on a 5-minute grid, stepping from raw would drift off-grid, while stepping
+    /// from offset gives an exact 5 → 10.
+    private func step(_ n: Int) {
+        apply(offset + Double(n) * snap)
+    }
+
+    /// `dx` is raw pointer movement in points, accumulated unsnapped — snapping every event
+    /// instead would round each small scroll tick back to where it started, so slow scrolling
+    /// would move nothing.
     private func scrub(by dx: CGFloat) {
-        raw += Double(dx) / Double(pxPerHour) * 3600
-        offset = (raw / snap).rounded() * snap
+        apply(raw + Double(dx) / Double(pxPerHour) * 3600)
     }
 
     private func reset() {
-        raw = 0
-        offset = 0
+        apply(0)
+    }
+
+    private func apply(_ newRaw: TimeInterval) {
+        (raw, offset) = clampedOffset(raw: newRaw, snap: snap)
     }
 
     private var shifted: String {

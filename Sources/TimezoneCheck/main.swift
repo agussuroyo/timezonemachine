@@ -118,4 +118,39 @@ assert(skyTint(hour: -5) == skyTint(hour: 0))
 // The row carries the tint through.
 assert(zoneInfo(for: "Asia/Tokyo", at: d, local: sf)!.sky == skyTint(hour: 8, minute: 0))
 
+// Ruler offset: clamping and snapping.
+let step5: TimeInterval = 300  // 5-minute grid
+
+// Snaps to the grid, including from a deliberately off-grid start.
+assert(clampedOffset(raw: 420, snap: step5).offset == 300)   // 7m  -> 5m
+assert(clampedOffset(raw: 460, snap: step5).offset == 600)   // 7m40 -> 10m
+
+// A step of n moves offset by exactly n * snap, even starting off-grid.
+let offGrid = clampedOffset(raw: 420, snap: step5).offset    // 300
+assert(clampedOffset(raw: offGrid + 2 * step5, snap: step5).offset == offGrid + 2 * step5)
+assert(clampedOffset(raw: offGrid - 1 * step5, snap: step5).offset == offGrid - step5)
+
+// Result always lands on the grid.
+for r in stride(from: -7000.0, through: 7000.0, by: 137.0) {
+    let o = clampedOffset(raw: r, snap: step5).offset
+    assert(o.truncatingRemainder(dividingBy: step5) == 0)
+}
+
+// Clamps both directions, and clamps raw too — so one step back from the limit moves
+// immediately rather than first unwinding invisible accumulated distance.
+let pinned = clampedOffset(raw: maxShift * 10, snap: step5)
+assert(pinned.offset == maxShift && pinned.raw == maxShift)
+assert(clampedOffset(raw: pinned.raw - step5, snap: step5).offset == maxShift - step5)
+
+let pinnedBack = clampedOffset(raw: -maxShift * 10, snap: step5)
+assert(pinnedBack.offset == -maxShift && pinnedBack.raw == -maxShift)
+assert(clampedOffset(raw: pinnedBack.raw + step5, snap: step5).offset == -maxShift + step5)
+
+// Reset zeroes both halves.
+let cleared = clampedOffset(raw: 0, snap: step5)
+assert(cleared.raw == 0 && cleared.offset == 0)
+
+// A zero snap must not divide by zero.
+assert(clampedOffset(raw: 420, snap: 0).offset == 420)
+
 print("all checks passed")
