@@ -1,0 +1,15 @@
+# Swift Package Manager build output
+.build/
+.swiftpm/
+Package.resolved
+
+# Assembled app bundle — produced by run.sh
+TimezoneMachine.app/
+
+# Local agent + editor config
+.claude/
+.vscode/
+xcuserdata/
+
+# macOS
+.DS_Store
