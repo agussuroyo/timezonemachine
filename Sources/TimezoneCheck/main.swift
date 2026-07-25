@@ -81,6 +81,10 @@ assert(here.isLocal)
 assert(here.offsetText == "—")
 assert(here.time == "16:00")
 
+// Seconds are zero-padded and taken from the instant (23:00:00Z here).
+assert(zoneInfo(for: "Asia/Tokyo", at: d, local: sf)!.seconds == "00")
+assert(zoneInfo(for: "Asia/Tokyo", at: utc("2026-07-20T23:00:07Z"), local: sf)!.seconds == "07")
+
 // Labels, search, unknown zones.
 assert(cityLabel("America/Argentina/Buenos_Aires") == "Buenos Aires")
 assert(cityLabel("UTC") == "UTC")

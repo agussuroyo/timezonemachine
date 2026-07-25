@@ -36,6 +36,7 @@ public struct ZoneInfo: Identifiable, Sendable {
     public let id: String        // IANA identifier, e.g. "Asia/Tokyo"
     public let label: String     // "Tokyo"
     public let time: String      // "23:40"
+    public let seconds: String   // "07" — shown only on the local row, to read the clock moving
     public let dayWord: String   // "today" | "tomorrow" | "yesterday" | "Mon 21"
     public let offsetText: String // "+9h" | "-5h30m" | "—" when it is the local zone
     public let isWeekend: Bool
@@ -124,6 +125,7 @@ public func zoneInfo(
         id: identifier,
         label: cityLabel(identifier),
         time: fmt.string(from: date),
+        seconds: String(format: "%02d", cal.component(.second, from: date)),
         dayWord: dayWord(zone, from: local, at: date),
         offsetText: isLocal ? "—" : offsetText(zone, from: local, at: date),
         isWeekend: cal.isDateInWeekend(date),

@@ -23,6 +23,7 @@ struct PopoverView: View {
     @AppStorage("zones") private var stored = defaultZones.joined(separator: "\n")
     @State private var offset: TimeInterval = 0
     @AppStorage("snapMinutes") private var snapMinutes = 15
+    @AppStorage("showSeconds") private var showSeconds = false
     @AppStorage("wake") private var wake = Hours.standard.wake
     @AppStorage("workStart") private var workStart = Hours.standard.workStart
     @AppStorage("workEnd") private var workEnd = Hours.standard.workEnd
@@ -42,8 +43,9 @@ struct PopoverView: View {
     }
 
     var body: some View {
-        // TimelineView ticks the clock for free and stops when the popover closes — no Timer to own.
-        TimelineView(.everyMinute) { context in
+        // Tick every second only when seconds are shown; otherwise every minute is enough.
+        // TimelineView drives it for free and stops when the popover closes — no Timer to own.
+        TimelineView(.periodic(from: .now, by: showSeconds ? 1 : 60)) { context in
             let local = TimeZone.current
             let simulated = context.date.addingTimeInterval(offset)
 
@@ -54,7 +56,7 @@ struct PopoverView: View {
                 // So this moves the row itself and does the index math, no drag session involved.
                 ForEach(zones, id: \.self) { id in
                     if let info = zoneInfo(for: id, at: simulated, local: local, hours: hours) {
-                        ZoneRow(info: info, onRemove: { remove(id) }, reduceMotion: reduceMotion)
+                        ZoneRow(info: info, onRemove: { remove(id) }, reduceMotion: reduceMotion, showSeconds: showSeconds)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         // Measure a real row once; the swap threshold must match actual height.
                         .background(
@@ -89,7 +91,7 @@ struct PopoverView: View {
 
                 // Local row is always last and never removable or movable.
                 if let here = zoneInfo(for: local.identifier, at: simulated, local: local, hours: hours) {
-                    ZoneRow(info: here, onRemove: nil, reduceMotion: reduceMotion)
+                    ZoneRow(info: here, onRemove: nil, reduceMotion: reduceMotion, showSeconds: showSeconds)
                 }
 
                 Ruler(offset: $offset, simulated: simulated, snap: TimeInterval(snapMinutes * 60))
@@ -127,6 +129,7 @@ struct PopoverView: View {
                 if showSettings {
                     SettingsView(
                         snapMinutes: $snapMinutes,
+                        showSeconds: $showSeconds,
                         wake: $wake,
                         workStart: $workStart,
                         workEnd: $workEnd,
@@ -167,6 +170,7 @@ struct PopoverView: View {
 
 private struct SettingsView: View {
     @Binding var snapMinutes: Int
+    @Binding var showSeconds: Bool
     @Binding var wake: Int
     @Binding var workStart: Int
     @Binding var workEnd: Int
@@ -185,6 +189,8 @@ private struct SettingsView: View {
                 .labelsHidden()
                 .frame(width: 100)
             }
+
+            Toggle("Show seconds on your row", isOn: $showSeconds)
 
             Text("Dot color")
                 .font(.caption)
@@ -224,6 +230,7 @@ private struct ZoneRow: View {
     let info: ZoneInfo
     let onRemove: (() -> Void)?  // nil for the local row, which can't be removed
     let reduceMotion: Bool
+    let showSeconds: Bool
 
     private var color: Color {
         switch info.vibe {
@@ -257,13 +264,26 @@ private struct ZoneRow: View {
             Text(info.isLocal ? "\(info.label) (you)" : info.label)
                 .fontWeight(info.isLocal ? .semibold : .regular)
                 .lineLimit(1)
+                .truncationMode(.tail)
 
             Spacer(minLength: 6)
 
-            Text(info.time)
-                .font(.system(.body, design: .monospaced))
-                // Digits roll like a departure board instead of snapping.
-                .contentTransition(.numericText())
+            // fixedSize + layoutPriority so the clock never compresses to "10:…" — the label
+            // yields first, since a truncated city name still reads but a truncated time does not.
+            HStack(alignment: .firstTextBaseline, spacing: 1) {
+                Text(info.time)
+                    .font(.system(.body, design: .monospaced))
+                    // Digits roll like a departure board instead of snapping.
+                    .contentTransition(.numericText())
+                // Seconds on the local row only, small, so the clock is visibly moving.
+                if info.isLocal && showSeconds {
+                    Text(":\(info.seconds)")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .fixedSize()
+            .layoutPriority(1)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(info.offsetText)
