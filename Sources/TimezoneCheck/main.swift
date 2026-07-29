@@ -124,6 +124,30 @@ assert(searchZones("vietnam").contains("Asia/Ho_Chi_Minh"))
 // Findable with a space where the identifier has an underscore.
 assert(searchZones("new york").contains("America/New_York"))
 assert(searchZones("ho chi minh").contains("Asia/Ho_Chi_Minh"))
+
+// Findable by UTC offset, in the spellings people actually type.
+let july = utc("2026-07-20T12:00:00Z")
+for spelling in ["utc+7", "UTC+7", "gmt+7", "+7", "utc +7", "utc+07:00"] {
+    assert(searchZones(spelling, at: july).contains("Asia/Jakarta"), spelling)
+    assert(!searchZones(spelling, at: july).contains("Asia/Tokyo"), spelling)  // Tokyo is +9
+}
+assert(searchZones("+5:30", at: july).contains("Asia/Calcutta"))
+assert(searchZones("utc-7", at: july).contains("America/Los_Angeles"))  // PDT in July
+assert(searchZones("+0", at: july).contains("GMT"))
+
+// DST-correct: London is +1 in July and +0 in January, and the query follows.
+assert(searchZones("+1", at: july).contains("Europe/London"))
+assert(!searchZones("+1", at: utc("2026-01-15T12:00:00Z")).contains("Europe/London"))
+
+// Bare "utc"/"gmt" is the zero offset, because the known-zone list has no "UTC" to match.
+assert(gmtQuery("utc") == 0)
+assert(searchZones("utc", at: july).contains("GMT"))
+
+// Not offset queries: fall through to text search rather than matching nothing.
+assert(gmtQuery("+99") == nil)      // no zone is +99, and 99 is not an hour
+assert(gmtQuery("+1:70") == nil)    // 70 is not a minute
+assert(gmtQuery("+1:2:3") == nil)
+assert(gmtQuery("tokyo") == nil)
 assert(zoneInfo(for: "Mars/Olympus_Mons", at: d, local: sf) == nil)
 
 // Sky ramp. Closes the circle: 24:00 must equal 00:00 or the colour seams at midnight.

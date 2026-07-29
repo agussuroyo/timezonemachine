@@ -186,10 +186,34 @@ private let searchIndex: [String: String] = {
     return index
 }()
 
+/// "utc+7", "gmt-3", "+5:30", "utc+05:45" -> seconds from GMT. Bare "utc"/"gmt" means zero,
+/// since the known-zone list spells that zone "GMT" and text search for "utc" finds nothing.
+/// nil when the query is not an offset at all.
+public func gmtQuery(_ query: String) -> Int? {
+    var s = query.lowercased().replacingOccurrences(of: " ", with: "")
+    var named = false
+    for prefix in ["utc", "gmt"] where s.hasPrefix(prefix) {
+        s.removeFirst(prefix.count)
+        named = true
+    }
+    if named && s.isEmpty { return 0 }
+    guard let sign = s.first, sign == "+" || sign == "-" else { return nil }
+
+    let parts = s.dropFirst().split(separator: ":", omittingEmptySubsequences: false)
+    guard parts.count <= 2, let hours = Int(parts[0]), hours <= 14 else { return nil }
+    guard let minutes = parts.count == 2 ? Int(parts[1]) : 0, minutes < 60 else { return nil }
+    return (sign == "-" ? -1 : 1) * (hours * 3600 + minutes * 60)
+}
+
 /// Candidates for the add-timezone picker. Falls back to all known zones when the query is empty.
-public func searchZones(_ query: String) -> [String] {
+/// An offset query is matched at `date` rather than against a stored offset, so it stays
+/// DST-correct: "utc+1" finds London in July, not in January.
+public func searchZones(_ query: String, at date: Date = Date()) -> [String] {
     let all = TimeZone.knownTimeZoneIdentifiers.sorted()
     let q = query.trimmingCharacters(in: .whitespaces)
     guard !q.isEmpty else { return all }
+    if let seconds = gmtQuery(q) {
+        return all.filter { TimeZone(identifier: $0)?.secondsFromGMT(for: date) == seconds }
+    }
     return all.filter { (searchIndex[$0] ?? $0).localizedCaseInsensitiveContains(q) }
 }
