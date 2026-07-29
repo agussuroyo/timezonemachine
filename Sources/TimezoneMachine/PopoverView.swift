@@ -484,10 +484,15 @@ private struct AddZoneView: View {
     @State private var query = ""
 
     private var matches: [String] {
-        searchZones(query).filter { !existing.contains($0) }
+        searchZones(query)
     }
 
     var body: some View {
+        // Already-added zones stay in the results, greyed out. Filtering them out made a
+        // search for a zone you already had answer "No timezone matches" — a lie.
+        let now = Date()
+        let local = TimeZone.current
+
         VStack(alignment: .leading, spacing: 6) {
             Divider()
 
@@ -503,23 +508,39 @@ private struct AddZoneView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(matches, id: \.self) { id in
+                            let added = existing.contains(id)
                             Button {
                                 pick(id)
                             } label: {
-                                HStack {
+                                HStack(spacing: 6) {
                                     Text(cityLabel(id))
-                                    Spacer()
-                                    Text(id).font(.caption).foregroundStyle(.secondary)
+                                    Text(id)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                    Spacer(minLength: 4)
+                                    Text(added ? "added" : offset(id, local, now))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        // Fixed width so the column holds still while typing.
+                                        .frame(width: 54, alignment: .trailing)
                                 }
                                 .contentShape(Rectangle())
                                 .padding(.vertical, 3)
                             }
                             .buttonStyle(.plain)
+                            .disabled(added)
+                            .opacity(added ? 0.45 : 1)
                         }
                     }
                 }
                 .frame(height: 180)
             }
         }
+    }
+
+    private func offset(_ id: String, _ local: TimeZone, _ now: Date) -> String {
+        TimeZone(identifier: id).map { offsetText($0, from: local, at: now) } ?? ""
     }
 }
