@@ -186,6 +186,23 @@ private let searchIndex: [String: String] = {
     return index
 }()
 
+/// Both of a zone's tzdata abbreviations — now and half a year from now — so "AEST" and
+/// "AEDT" each find Sydney whichever side of DST today is on.
+/// ponytail: built on first use and only when the text search finds nothing, because each
+/// zone costs a setenv+tzset round trip: ~350ms for all ~440 zones. Drop the lazy-fallback
+/// wiring in `searchZones` if a cheaper source of tzdata names ever appears.
+private let abbreviationIndex: [String: String] = {
+    let now = Date()
+    let halfYearOn = now.addingTimeInterval(182 * 86400)
+    var index: [String: String] = [:]
+    for id in TimeZone.knownTimeZoneIdentifiers {
+        guard let zone = TimeZone(identifier: id) else { continue }
+        let names = [abbreviation(zone, at: now), abbreviation(zone, at: halfYearOn)]
+        index[id] = Set(names.compactMap { $0 }).joined(separator: " ")
+    }
+    return index
+}()
+
 /// "utc+7", "gmt-3", "+5:30", "utc+05:45" -> seconds from GMT. Bare "utc"/"gmt" means zero,
 /// since the known-zone list spells that zone "GMT" and text search for "utc" finds nothing.
 /// nil when the query is not an offset at all.
@@ -208,6 +225,9 @@ public func gmtQuery(_ query: String) -> Int? {
 /// Candidates for the add-timezone picker. Falls back to all known zones when the query is empty.
 /// An offset query is matched at `date` rather than against a stored offset, so it stays
 /// DST-correct: "utc+1" finds London in July, not in January.
+///
+/// Abbreviations ("AEST", "JST") are tried only after the text search comes up empty, so the
+/// common case never pays for building that index.
 public func searchZones(_ query: String, at date: Date = Date()) -> [String] {
     let all = TimeZone.knownTimeZoneIdentifiers.sorted()
     let q = query.trimmingCharacters(in: .whitespaces)
@@ -215,5 +235,7 @@ public func searchZones(_ query: String, at date: Date = Date()) -> [String] {
     if let seconds = gmtQuery(q) {
         return all.filter { TimeZone(identifier: $0)?.secondsFromGMT(for: date) == seconds }
     }
-    return all.filter { (searchIndex[$0] ?? $0).localizedCaseInsensitiveContains(q) }
+    let byText = all.filter { (searchIndex[$0] ?? $0).localizedCaseInsensitiveContains(q) }
+    guard byText.isEmpty else { return byText }
+    return all.filter { (abbreviationIndex[$0] ?? "").localizedCaseInsensitiveContains(q) }
 }

@@ -496,7 +496,7 @@ private struct AddZoneView: View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
 
-            TextField("Search city, region, or utc+7", text: $query)
+            TextField("Search city, region, utc+7, AEST", text: $query)
                 .textFieldStyle(.roundedBorder)
 
             if matches.isEmpty {

@@ -148,6 +148,16 @@ assert(gmtQuery("+99") == nil)      // no zone is +99, and 99 is not an hour
 assert(gmtQuery("+1:70") == nil)    // 70 is not a minute
 assert(gmtQuery("+1:2:3") == nil)
 assert(gmtQuery("tokyo") == nil)
+
+// Findable by tzdata abbreviation, on either side of DST.
+assert(searchZones("aest").contains("Australia/Sydney"))
+assert(searchZones("AEDT").contains("Australia/Sydney"))
+assert(searchZones("jst").contains("Asia/Tokyo"))
+assert(searchZones("wib").contains("Asia/Jakarta"))
+assert(searchZones("pst").contains("America/Los_Angeles"))
+assert(searchZones("pdt").contains("America/Los_Angeles"))
+// A text match wins, so a city name is never crowded out by abbreviations.
+assert(searchZones("tokyo") == ["Asia/Tokyo"])
 assert(zoneInfo(for: "Mars/Olympus_Mons", at: d, local: sf) == nil)
 
 // Sky ramp. Closes the circle: 24:00 must equal 00:00 or the colour seams at midnight.
