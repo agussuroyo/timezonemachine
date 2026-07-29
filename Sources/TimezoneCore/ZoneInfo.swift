@@ -168,10 +168,28 @@ public func zoneInfo(
     )
 }
 
+/// What a zone can be found by: its identifier, its city with spaces instead of underscores,
+/// and the CLDR names, which carry the country or region — so "bangladesh" finds Asia/Dhaka
+/// and "new york" finds America/New_York, neither of which the raw identifier spells.
+/// Built once per zone and cached, because the CLDR lookups run for all ~440 zones on every
+/// keystroke otherwise.
+private let searchIndex: [String: String] = {
+    var index: [String: String] = [:]
+    for id in TimeZone.knownTimeZoneIdentifiers {
+        guard let zone = TimeZone(identifier: id) else { continue }
+        let names = [
+            zone.localizedName(for: .generic, locale: .current),
+            zone.localizedName(for: .shortGeneric, locale: .current)
+        ]
+        index[id] = ([id, cityLabel(id)] + names.compactMap { $0 }).joined(separator: " ")
+    }
+    return index
+}()
+
 /// Candidates for the add-timezone picker. Falls back to all known zones when the query is empty.
 public func searchZones(_ query: String) -> [String] {
     let all = TimeZone.knownTimeZoneIdentifiers.sorted()
     let q = query.trimmingCharacters(in: .whitespaces)
     guard !q.isEmpty else { return all }
-    return all.filter { $0.localizedCaseInsensitiveContains(q) }
+    return all.filter { (searchIndex[$0] ?? $0).localizedCaseInsensitiveContains(q) }
 }

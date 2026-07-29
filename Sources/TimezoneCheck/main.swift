@@ -117,6 +117,13 @@ assert(cityLabel("UTC") == "UTC")
 assert(searchZones("tokyo") == ["Asia/Tokyo"])
 assert(searchZones("").count > 100)
 assert(searchZones("nope-nowhere").isEmpty)
+// Findable by country or region, which no identifier spells.
+assert(searchZones("bangladesh").contains("Asia/Dhaka"))
+assert(searchZones("india").contains("Asia/Calcutta"))
+assert(searchZones("vietnam").contains("Asia/Ho_Chi_Minh"))
+// Findable with a space where the identifier has an underscore.
+assert(searchZones("new york").contains("America/New_York"))
+assert(searchZones("ho chi minh").contains("Asia/Ho_Chi_Minh"))
 assert(zoneInfo(for: "Mars/Olympus_Mons", at: d, local: sf) == nil)
 
 // Sky ramp. Closes the circle: 24:00 must equal 00:00 or the colour seams at midnight.
