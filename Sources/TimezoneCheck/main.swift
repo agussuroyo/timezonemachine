@@ -32,6 +32,28 @@ assert(offsetText(kolkata, from: utcZone, at: utc("2026-07-20T12:00:00Z")) == "+
 assert(offsetText(utcZone, from: kolkata, at: utc("2026-07-20T12:00:00Z")) == "-5h30m")
 assert(offsetText(utcZone, from: utcZone, at: utc("2026-07-20T12:00:00Z")) == "same")
 
+// Abbreviations come from tzdata, flip with DST, and are nil when tzdata only has a number.
+assert(abbreviation(sf, at: utc("2026-01-15T12:00:00Z")) == "PST")
+assert(abbreviation(sf, at: utc("2026-07-15T12:00:00Z")) == "PDT")
+assert(abbreviation(tokyo, at: utc("2026-07-15T12:00:00Z")) == "JST")
+// Foundation normalises TimeZone(identifier: "UTC").identifier to "GMT", so tzdata answers GMT.
+assert(abbreviation(utcZone, at: utc("2026-07-15T12:00:00Z")) == "GMT")
+// Southern hemisphere: DST is on in January, off in July.
+let sydney = TimeZone(identifier: "Australia/Sydney")!
+assert(abbreviation(sydney, at: utc("2026-01-15T12:00:00Z")) == "AEDT")
+assert(abbreviation(sydney, at: utc("2026-07-15T12:00:00Z")) == "AEST")
+// Dhaka has no name in tzdata, only "+06" — dropped rather than repeated as an offset.
+assert(abbreviation(TimeZone(identifier: "Asia/Dhaka")!, at: utc("2026-07-15T12:00:00Z")) == nil)
+// Reading an abbreviation must not leave TZ set behind, or every later zone reads wrong.
+assert(getenv("TZ") == nil)
+assert(abbreviation(tokyo, at: utc("2026-07-15T12:00:00Z")) == "JST")
+
+// Scrubbing across the US spring-forward instant (2026-03-08 07:00Z) flips the whole caption.
+assert(zoneInfo(for: "America/New_York", at: utc("2026-03-08T06:59:00Z"), local: tokyo)!
+    .offsetText == "EST · -14h")
+assert(zoneInfo(for: "America/New_York", at: utc("2026-03-08T07:01:00Z"), local: tokyo)!
+    .offsetText == "EDT · -13h")
+
 // Vibe boundaries, default hours: awake 06–21, work 08–17.
 assert(vibe(hour: 5) == .asleep)
 assert(vibe(hour: 6) == .fringe)
@@ -71,14 +93,18 @@ let d = utc("2026-07-20T23:00:00Z")
 let row = zoneInfo(for: "Asia/Tokyo", at: d, local: sf)!
 assert(row.label == "Tokyo")
 assert(row.time == "08:00")
-assert(row.offsetText == "+16h")
+assert(row.offsetText == "JST · +16h")
 assert(row.dayWord == "tomorrow")
 assert(row.vibe == .working)  // 08:00 is workStart under the default hours
 assert(!row.isLocal)
 
 let here = zoneInfo(for: "America/Los_Angeles", at: d, local: sf)!
 assert(here.isLocal)
-assert(here.offsetText == "—")
+assert(here.offsetText == "PDT")  // own row: abbreviation only, no self-offset
+assert(zoneInfo(for: "Asia/Jakarta", at: d, local: TimeZone(identifier: "Asia/Jakarta")!)!
+    .offsetText == "WIB")         // own row, named zone: abbreviation carries it
+assert(zoneInfo(for: "Asia/Dhaka", at: d, local: TimeZone(identifier: "Asia/Dhaka")!)!
+    .offsetText == "—")           // own row, unnamed zone: nothing to show
 assert(here.time == "16:00")
 
 // Seconds are zero-padded and taken from the instant (23:00:00Z here).

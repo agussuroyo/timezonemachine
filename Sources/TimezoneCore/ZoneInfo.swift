@@ -70,6 +70,34 @@ public func offsetText(_ zone: TimeZone, from local: TimeZone, at date: Date) ->
     return minutes == 0 ? "\(sign)\(hours)h" : "\(sign)\(hours)h\(minutes)m"
 }
 
+/// "JST" / "EDT" / "WIB" / "CEST" — the zone's own abbreviation at that instant, DST-correct.
+/// Read from the system tzdata via strftime %Z, because Foundation only knows CLDR short
+/// names (US zones) and answers "GMT+9" for everything else. Zones tzdata has no name for
+/// answer "+07" / "-03": numeric, so it would only repeat `offsetText` — dropped.
+/// ponytail: setenv+tzset is process-global and not thread-safe; called from the main
+/// actor only. If this ever runs off the main thread, cache the results per zone per hour.
+public func abbreviation(_ zone: TimeZone, at date: Date) -> String? {
+    let saved = getenv("TZ").map { String(cString: $0) }
+    setenv("TZ", zone.identifier, 1)
+    tzset()
+    defer {
+        if let saved { setenv("TZ", saved, 1) } else { unsetenv("TZ") }
+        tzset()
+    }
+
+    var parts = tm()
+    var stamp = time_t(date.timeIntervalSince1970)
+    localtime_r(&stamp, &parts)
+    var buffer = [UInt8](repeating: 0, count: 16)
+    let written = buffer.withUnsafeMutableBytes {
+        strftime($0.baseAddress!.assumingMemoryBound(to: CChar.self), 16, "%Z", &parts)
+    }
+
+    let name = String(decoding: buffer[..<written], as: UTF8.self)
+    guard let first = name.first, first.isLetter else { return nil }
+    return name
+}
+
 /// The zone's wall-clock calendar day, re-anchored to UTC midnight so two zones' days
 /// can be subtracted exactly. Diffing the real start-of-day instants instead would
 /// truncate (a -5h gap reads as 0 days) and mislabel date-line neighbours.
@@ -120,6 +148,8 @@ public func zoneInfo(
     fmt.dateFormat = "HH:mm"
 
     let isLocal = zone.identifier == local.identifier
+    let caption = [abbreviation(zone, at: date), isLocal ? nil : offsetText(zone, from: local, at: date)]
+        .compactMap { $0 }.joined(separator: " · ")
 
     return ZoneInfo(
         id: identifier,
@@ -127,7 +157,7 @@ public func zoneInfo(
         time: fmt.string(from: date),
         seconds: String(format: "%02d", cal.component(.second, from: date)),
         dayWord: dayWord(zone, from: local, at: date),
-        offsetText: isLocal ? "—" : offsetText(zone, from: local, at: date),
+        offsetText: caption.isEmpty ? "—" : caption,
         isWeekend: cal.isDateInWeekend(date),
         vibe: vibe(hour: cal.component(.hour, from: date), hours: hours),
         sky: skyTint(

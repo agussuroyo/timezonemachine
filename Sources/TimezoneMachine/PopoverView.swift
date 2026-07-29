@@ -292,7 +292,7 @@ private struct ZoneRow: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize()  // two lines of caption; never let the row squeeze them
-            .frame(width: 92, alignment: .leading)
+            .frame(width: 108, alignment: .leading)  // fits "PDT · -16h30m"
 
             // Always drawn so the row height never shifts; invisible on the local row.
             Button { onRemove?() } label: {
