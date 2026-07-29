@@ -98,6 +98,16 @@ public func abbreviation(_ zone: TimeZone, at date: Date) -> String? {
     return name
 }
 
+/// "JST · +16h" — what the zone is called and how far it is from you. The offset is dropped
+/// for your own zone, the abbreviation when tzdata has no name for the zone, and "—" is left
+/// when neither half has anything to say.
+public func zoneCaption(_ zone: TimeZone, from local: TimeZone, at date: Date) -> String {
+    let isLocal = zone.identifier == local.identifier
+    let text = [abbreviation(zone, at: date), isLocal ? nil : offsetText(zone, from: local, at: date)]
+        .compactMap { $0 }.joined(separator: " · ")
+    return text.isEmpty ? "—" : text
+}
+
 /// The zone's wall-clock calendar day, re-anchored to UTC midnight so two zones' days
 /// can be subtracted exactly. Diffing the real start-of-day instants instead would
 /// truncate (a -5h gap reads as 0 days) and mislabel date-line neighbours.
@@ -148,8 +158,6 @@ public func zoneInfo(
     fmt.dateFormat = "HH:mm"
 
     let isLocal = zone.identifier == local.identifier
-    let caption = [abbreviation(zone, at: date), isLocal ? nil : offsetText(zone, from: local, at: date)]
-        .compactMap { $0 }.joined(separator: " · ")
 
     return ZoneInfo(
         id: identifier,
@@ -157,7 +165,7 @@ public func zoneInfo(
         time: fmt.string(from: date),
         seconds: String(format: "%02d", cal.component(.second, from: date)),
         dayWord: dayWord(zone, from: local, at: date),
-        offsetText: caption.isEmpty ? "—" : caption,
+        offsetText: zoneCaption(zone, from: local, at: date),
         isWeekend: cal.isDateInWeekend(date),
         vibe: vibe(hour: cal.component(.hour, from: date), hours: hours),
         sky: skyTint(

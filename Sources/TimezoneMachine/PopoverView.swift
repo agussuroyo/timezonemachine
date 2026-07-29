@@ -520,11 +520,11 @@ private struct AddZoneView: View {
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                     Spacer(minLength: 4)
-                                    Text(added ? "added" : offset(id, local, now))
+                                    Text(added ? "added" : caption(id, local, now))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         // Fixed width so the column holds still while typing.
-                                        .frame(width: 54, alignment: .trailing)
+                                        .frame(width: 96, alignment: .trailing)
                                 }
                                 .contentShape(Rectangle())
                                 .padding(.vertical, 3)
@@ -540,7 +540,7 @@ private struct AddZoneView: View {
         }
     }
 
-    private func offset(_ id: String, _ local: TimeZone, _ now: Date) -> String {
-        TimeZone(identifier: id).map { offsetText($0, from: local, at: now) } ?? ""
+    private func caption(_ id: String, _ local: TimeZone, _ now: Date) -> String {
+        TimeZone(identifier: id).map { zoneCaption($0, from: local, at: now) } ?? ""
     }
 }

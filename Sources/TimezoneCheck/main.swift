@@ -54,6 +54,13 @@ assert(zoneInfo(for: "America/New_York", at: utc("2026-03-08T06:59:00Z"), local:
 assert(zoneInfo(for: "America/New_York", at: utc("2026-03-08T07:01:00Z"), local: tokyo)!
     .offsetText == "EDT · -13h")
 
+// The caption pairs the name with the distance, and drops whichever half says nothing.
+assert(zoneCaption(tokyo, from: sf, at: utc("2026-07-15T12:00:00Z")) == "JST · +16h")
+assert(zoneCaption(tokyo, from: tokyo, at: utc("2026-07-15T12:00:00Z")) == "JST")
+let dhaka = TimeZone(identifier: "Asia/Dhaka")!
+assert(zoneCaption(dhaka, from: sf, at: utc("2026-07-15T12:00:00Z")) == "+13h")
+assert(zoneCaption(dhaka, from: dhaka, at: utc("2026-07-15T12:00:00Z")) == "—")
+
 // Vibe boundaries, default hours: awake 06–21, work 08–17.
 assert(vibe(hour: 5) == .asleep)
 assert(vibe(hour: 6) == .fringe)
